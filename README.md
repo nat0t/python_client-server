@@ -1,0 +1,1 @@
+Repository for learning of development client-sever apllications.
