@@ -10,24 +10,32 @@ a. Создать функцию write_order_to_json(), в которую пер
 b. Проверить работу программы через вызов функции write_order_to_json()
 с передачей в нее значений каждого параметра.
 """
-import os.path as path
 import json
 
 
 def write_order_to_json(item: str, quantity: int, price: int, buyer: str,
                         date: str) -> None:
-    file_name = 'orders.json'
-    to_json = {'orders': []}
-    order = {
-        "item": item,
-        "quantity": quantity,
-        "price": price,
-        "buyer": buyer,
-        "date": date
-    }
+    """
+    Write dictionary with the transferred data to file ./orders.json.
 
-    to_json['orders'].append(order)
-    with open(path.join('src', file_name), 'w', encoding='cp1251') as file:
+    :param item: name of product.
+    :param quantity: quantity of ordered goods.
+    :param price: price of product.
+    :param buyer: customer.
+    :param date: order creation date.
+    """
+
+    file_name = 'orders.json'
+    to_json = {'orders': [
+        {
+            'item': item,
+            'quantity': quantity,
+            'price': price,
+            'buyer': buyer,
+            'date': date
+        }
+    ]}
+    with open(file_name, 'w', encoding='cp1251') as file:
         json.dump(to_json, file, indent=4)
 
 

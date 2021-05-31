@@ -27,7 +27,9 @@ import csv
 
 
 def get_data() -> list:
-    files = ('info_1.txt', 'info_2.txt', 'info_3.txt')
+    """Return OS data from the files in the directory ./src/."""
+
+    files = ['info_1.txt', 'info_2.txt', 'info_3.txt']
     headers = ['Изготовитель системы', 'Название ОС', 'Код продукта',
                'Тип системы']
     os_prod_list, os_name_list, os_code_list, os_type_list = ([] for _ in
@@ -36,19 +38,20 @@ def get_data() -> list:
                  os_type_list]
 
     for file_name in files:
-        with open(path.join('src', file_name), encoding='cp1251') as file:
-            data = file.read()
-            # for i in range(len(headers)):
-            #     main_data[i + 1].extend(
-            #         re.findall(fr'{headers[i]}:\s*(.+)\n', data))
-            os_prod_list.extend(re.findall(fr'{headers[0]}:\s*(.+)\n', data))
-            os_name_list.extend(re.findall(fr'{headers[1]}:\s*(.+)\n', data))
-            os_code_list.extend(re.findall(fr'{headers[2]}:\s*(.+)\n', data))
-            os_type_list.extend(re.findall(fr'{headers[3]}:\s*(.+)\n', data))
+        try:
+            with open(path.join('src', file_name), encoding='cp1251') as file:
+                data = file.read()
+                for i in range(len(headers)):
+                    main_data[i + 1].extend(
+                        re.findall(fr'{headers[i]}:\s*(.+)\n', data))
+        except FileNotFoundError:
+            print(f'File {file_name} not found. Parsing skipped.')
     return main_data
 
 
 def write_to_csv(file_name: str, data: list) -> None:
+    """Write the transferred data to the specified csv-file."""
+
     with open(file_name, 'w') as file:
         writer = csv.writer(file, quoting=csv.QUOTE_NONNUMERIC)
         writer.writerows(data)

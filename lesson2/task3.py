@@ -16,6 +16,8 @@ import yaml
 
 
 def write_data_to_yaml(data: dict, file_name: str) -> None:
+    """Write the transferred data to the specified yaml-file."""
+
     with open(file_name, 'w', encoding='utf-8') as file:
         yaml.dump(data, file, default_flow_style=False, allow_unicode=True)
 
