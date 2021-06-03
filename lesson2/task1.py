@@ -52,9 +52,10 @@ def get_data() -> list:
 def write_to_csv(file_name: str, data: list) -> None:
     """Write the transferred data to the specified csv-file."""
 
-    with open(file_name, 'w') as file:
+    with open(file_name, 'w', newline='') as file:
         writer = csv.writer(file, quoting=csv.QUOTE_NONNUMERIC)
-        writer.writerows(data)
+        writer.writerow(data[0])
+        writer.writerows(zip(*data[1:]))
 
 
 def main():
