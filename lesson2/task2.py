@@ -26,17 +26,19 @@ def write_order_to_json(item: str, quantity: int, price: int, buyer: str,
     """
 
     file_name = 'orders.json'
-    to_json = {'orders': [
+
+    with open(file_name) as file:
+        data = json.load(file)
+    data['orders'].append(
         {
             'item': item,
             'quantity': quantity,
             'price': price,
             'buyer': buyer,
             'date': date
-        }
-    ]}
+        })
     with open(file_name, 'w', encoding='cp1251') as file:
-        json.dump(to_json, file, indent=4)
+        json.dump(data, file, indent=4)
 
 
 def main():
