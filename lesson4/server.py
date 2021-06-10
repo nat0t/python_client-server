@@ -28,18 +28,22 @@ def init() -> socket:
     except OSError as error:
         print(f'Socket was not initiated with next error:\n{error}')
     else:
-        print(f'Server is running on {addr}:{port}...')
+        print(f'Server is listening {addr}:{port}...')
         return s
 
 
 def get_request(data: bytes) -> dict:
     """Unpack request getting from client."""
 
+    request = {}
     try:
         request = pickle.loads(data)
     except pickle.UnpicklingError:
         print('Cannot unpack message getting from client.')
-        request = {}
+    except TypeError:
+        print('Got not bytes-like object for unpacking.')
+    except Exception as error:
+        print(f'Unexpected error:\n{error}')
     return request
 
 
@@ -51,12 +55,9 @@ def prepare_response(code: int) -> dict:
         202: 'Accepted',
         400: 'Bad request',
     }
-
-    return {
-        'response': code,
-        'time': time(),
-        'alert': alerts[code]
-    }
+    alert = alerts.get(code)
+    result = {'response': code, 'time': time(), 'alert': alert}
+    return result if alert else None
 
 
 def set_response(request: dict) -> bytes:
@@ -67,7 +68,11 @@ def set_response(request: dict) -> bytes:
         'stop': 202,
     }
 
-    action = request.get('action')
+    try:
+        action = request.get('action')
+    except Exception as error:
+        print(error)
+        return b''
     code = actions[action] if action else 400
     try:
         return pickle.dumps(prepare_response(code))

@@ -59,11 +59,15 @@ def set_request(action: str, user: str, status: str = None) -> bytes:
 def get_response(data: bytes) -> dict:
     """Unpack response getting from server."""
 
+    response = {}
     try:
         response = pickle.loads(data)
     except pickle.UnpicklingError:
         print('Cannot unpack message getting from server.')
-        response = {}
+    except TypeError:
+        print('Got not bytes-like object for unpacking.')
+    except Exception as error:
+        print(f'Unexpected error:\n{error}')
     return response
 
 
