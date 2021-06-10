@@ -1,11 +1,24 @@
 import socket
 from time import time
 import pickle
+import argparse
 
 
-def init(addr: str = 'localhost', port: int = 7777) -> socket:
+def get_args():
+    """Get arguments for server starting. """
+
+    parser = argparse.ArgumentParser(
+        description='Messenger startup settings')
+    parser.add_argument('addr', help='Server address')
+    parser.add_argument('port', type=int, help='Server port')
+    args = parser.parse_args()
+    return args.addr, args.port
+
+
+def init() -> socket:
     """Init socket for messenger client."""
 
+    addr, port = get_args()
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.connect((addr, port))

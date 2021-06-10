@@ -1,11 +1,26 @@
 import socket
 from time import time
 import pickle
+import argparse
 
 
-def init(addr: str = 'localhost', port: int = 7777) -> socket:
+def get_args():
+    """Get arguments for server starting. """
+
+    parser = argparse.ArgumentParser(
+        description='Messenger startup settings')
+    parser.add_argument('-a', action='store', dest='addr', default='0.0.0.0',
+                        help='Listening address')
+    parser.add_argument('-p', action='store', dest='port', type=int, default=7777,
+                        help='Listening port')
+    args = parser.parse_args()
+    return args.addr, args.port
+
+
+def init() -> socket:
     """Init socket for server of messaging."""
 
+    addr, port = get_args()
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((addr, port))
     try:
