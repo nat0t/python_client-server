@@ -35,7 +35,7 @@ def test_server_prepare_response_200(resource_setup):
 
 
 def test_server_prepare_response_incorrect_code():
-    assert server.prepare_response(500) == None
+    assert server.prepare_response(500) is None
 
 
 def test_server_set_response_with_dict(resource_setup):
@@ -47,6 +47,13 @@ def test_server_set_response_incorrect_arg():
 
 
 def test_client_set_request_presence(resource_setup):
-    assert client.set_request('presence', 'user', 'status') == resource_setup[1]
+    assert client.set_request('presence', 'user', 'status') == \
+           resource_setup[1]
 
-# def test_client_get_response
+
+def test_client_get_response_with_dict(resource_setup):
+    assert client.get_response(resource_setup[3]) == resource_setup[2]
+
+
+def test_client_get_response_incorrect_arg():
+    assert client.get_response(None) == {}
