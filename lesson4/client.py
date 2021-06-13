@@ -2,6 +2,10 @@ import socket
 from time import time
 import pickle
 import argparse
+import logging.config
+
+logging.config.fileConfig('logging.ini')
+logger = logging.getLogger('messenger.client')
 
 
 def get_args():
@@ -20,13 +24,15 @@ def init() -> socket:
 
     addr, port = get_args()
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    logger.info(f'Trying to connect to {addr}:{port}.')
     try:
         s.connect((addr, port))
     except ConnectionRefusedError:
-        print('Failed to establish connection with server.')
+        logger.critical('Failed to establish connection with server.')
     except OSError as error:
-        print(f'Socket was not initiated with next error:\n{error}')
+        logger.critical(f'Socket was not initiated with next error: {error}')
     else:
+        logger.info(f'Connected to server on {addr}:{port}.')
         return s
 
 
@@ -52,7 +58,7 @@ def set_request(action: str, user: str, status: str = None) -> bytes:
     try:
         return pickle.dumps(request) if request else None
     except pickle.PicklingError:
-        print('Cannot pack message for sending to server.')
+        logger.error('Cannot pack message for sending to server.')
         return b''
 
 
@@ -63,11 +69,13 @@ def get_response(data: bytes) -> dict:
     try:
         response = pickle.loads(data)
     except pickle.UnpicklingError:
-        print('Cannot unpack message getting from server.')
+        logger.error('Cannot unpack message getting from server.')
     except TypeError:
-        print('Got not bytes-like object for unpacking.')
+        logger.error('Got not bytes-like object for unpacking.')
     except Exception as error:
-        print(f'Unexpected error:\n{error}')
+        logger.error(f'Unexpected error: {error}')
+    else:
+        logger.info(f'Server responded with code {response["response"]}.')
     return response
 
 
@@ -84,13 +92,12 @@ def main():
             conn.send(request)
             try:
                 data = conn.recv(msg_max_size)
-            except ConnectionError:
-                print('Connection error.')
             except Exception as error:
-                print(f'Unexpected error:\n{error}')
+                logger.error(f'Unexpected error: {error}')
             else:
                 response = get_response(data)
                 print(response)
+            logger.info(f'Connection closed.')
 
 
 if __name__ == '__main__':

@@ -2,6 +2,10 @@ import socket
 from time import time
 import pickle
 import argparse
+import logging.config
+
+logging.config.fileConfig('logging.ini')
+logger = logging.getLogger('messenger.server')
 
 
 def get_args():
@@ -11,8 +15,8 @@ def get_args():
         description='Messenger startup settings')
     parser.add_argument('-a', action='store', dest='addr', default='0.0.0.0',
                         help='Listening address')
-    parser.add_argument('-p', action='store', dest='port', type=int, default=7777,
-                        help='Listening port')
+    parser.add_argument('-p', action='store', dest='port', type=int,
+                        default=7777, help='Listening port')
     args = parser.parse_args()
     return args.addr, args.port
 
@@ -26,9 +30,9 @@ def init() -> socket:
     try:
         s.listen()
     except OSError as error:
-        print(f'Socket was not initiated with next error:\n{error}')
+        logger.critical(f'Socket was not initiated with next error: {error}')
     else:
-        print(f'Server is listening {addr}:{port}...')
+        logger.info(f'Server started.')
         return s
 
 
@@ -39,11 +43,13 @@ def get_request(data: bytes) -> dict:
     try:
         request = pickle.loads(data)
     except pickle.UnpicklingError:
-        print('Cannot unpack message getting from client.')
+        logger.error('Cannot unpack message getting from client.')
     except TypeError:
-        print('Got not bytes-like object for unpacking.')
+        logger.error('Got not bytes-like object for unpacking.')
     except Exception as error:
-        print(f'Unexpected error:\n{error}')
+        logger.error(f'Unexpected error: {error}')
+    else:
+        logger.info(f'Client sent {request["action"]}-message.')
     return request
 
 
@@ -67,18 +73,21 @@ def set_response(request: dict) -> bytes:
         'presence': 200,
         'stop': 202,
     }
+    result = b''
 
     try:
         action = request.get('action')
+    except AttributeError:
+        logger.error('The data to send is not dictionary. ')
     except Exception as error:
-        print(error)
-        return b''
-    code = actions[action] if action else 400
-    try:
-        return pickle.dumps(prepare_response(code))
-    except pickle.PicklingError:
-        print('Cannot pack message for sending to client.')
-        return b''
+        logger.error(f'Unexpected error: {error}')
+    else:
+        code = actions[action] if action else 400
+        try:
+            result = pickle.dumps(prepare_response(code))
+        except pickle.PicklingError:
+            logger.error('Cannot pack message for sending to client.')
+    return result
 
 
 def process(sock: socket) -> None:
@@ -91,9 +100,9 @@ def process(sock: socket) -> None:
         try:
             data = conn.recv(msg_max_size)
         except socket.timeout:
-            print('Socket was timed out. Server stopped.')
+            logger.warning('Socket was timed out. Server stopped.')
         except OSError as error:
-            print(f'Unexpected error:\n{error}')
+            logger.error(f'Unexpected error: {error}')
         else:
             request = get_request(data)
             print(request)
@@ -102,9 +111,10 @@ def process(sock: socket) -> None:
             if response:
                 conn.send(response)
                 conn.close()
+                logger.info(f'Connection closed.')
 
             if request['action'] == 'stop':
-                print('Server stopping...')
+                logger.info('Server stopped.')
                 break
 
 
