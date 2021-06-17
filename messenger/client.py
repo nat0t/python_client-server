@@ -3,7 +3,7 @@ from time import time
 import pickle
 import argparse
 import logging.config
-from decorators import get_caller_name
+from decorators import log
 
 logging.config.fileConfig('logging.ini')
 logger = logging.getLogger('messenger.client')
@@ -20,7 +20,7 @@ def get_args():
     return args.addr, args.port
 
 
-@get_caller_name()
+@log
 def init() -> socket:
     """Init socket for messenger client."""
 
@@ -38,7 +38,7 @@ def init() -> socket:
         return s
 
 
-@get_caller_name()
+@log
 def set_request(action: str, user: str, status: str = None) -> bytes:
     """Form request for sending to server."""
 
@@ -65,7 +65,7 @@ def set_request(action: str, user: str, status: str = None) -> bytes:
         return b''
 
 
-@get_caller_name()
+@log
 def get_response(data: bytes) -> dict:
     """Unpack response getting from server."""
 
@@ -83,7 +83,7 @@ def get_response(data: bytes) -> dict:
     return response
 
 
-@get_caller_name()
+@log
 def main():
     msg_max_size = 100
     actions = ('presence', 'stop')

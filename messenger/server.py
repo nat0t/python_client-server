@@ -3,7 +3,7 @@ from time import time
 import pickle
 import argparse
 import logging.config
-from decorators import get_caller_name
+from decorators import log
 
 logging.config.fileConfig('logging.ini')
 logger = logging.getLogger('messenger.server')
@@ -22,7 +22,7 @@ def get_args():
     return args.addr, args.port
 
 
-@get_caller_name()
+@log
 def init() -> socket:
     """Init socket for server of messaging."""
 
@@ -38,7 +38,7 @@ def init() -> socket:
         return s
 
 
-@get_caller_name()
+@log
 def get_request(data: bytes) -> dict:
     """Unpack request getting from client."""
 
@@ -56,7 +56,7 @@ def get_request(data: bytes) -> dict:
     return request
 
 
-@get_caller_name()
+@log
 def prepare_response(code: int) -> dict:
     """Prepare answer based on getting code."""
 
@@ -70,7 +70,7 @@ def prepare_response(code: int) -> dict:
     return result if alert else None
 
 
-@get_caller_name()
+@log
 def set_response(request: dict) -> bytes:
     """Form response for sending to client."""
 
@@ -95,7 +95,7 @@ def set_response(request: dict) -> bytes:
     return result
 
 
-@get_caller_name()
+@log
 def process(sock: socket) -> None:
     """Main server process."""
 

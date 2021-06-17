@@ -22,20 +22,9 @@ logger = logging.getLogger('messenger.call')
 def log(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
+        caller = getouterframes(currentframe())[1][3]
         logger.info(
-            f'Function {func.__name__} was called with args {args}, {kwargs}.')
+            f'Function {func.__name__} was called with args {args},'
+            f'{kwargs}. This one was called from {caller}.')
         return func(*args, **kwargs)
-    return wrapper
-
-
-def get_caller_name():
-    def wrapper(func):
-        @wraps(func)
-        def wrapped(*args, **kwargs):
-            caller = getouterframes(currentframe())[1][3]
-            logger.info(
-                f'Function {func.__name__} was called with args {args},'
-                f'{kwargs}. This one was called from {caller}.')
-            return func(*args, **kwargs)
-        return wrapped
     return wrapper
