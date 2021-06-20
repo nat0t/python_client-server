@@ -1,3 +1,4 @@
+import select
 import socket
 from time import time
 import pickle
@@ -31,29 +32,12 @@ def init() -> socket:
     s.bind((addr, port))
     try:
         s.listen()
+        s.settimeout(0.2)
     except OSError as error:
         logger.critical(f'Socket was not initiated with next error: {error}')
     else:
         logger.info(f'Server started.')
         return s
-
-
-@log
-def get_request(data: bytes) -> dict:
-    """Unpack request getting from client."""
-
-    request = {}
-    try:
-        request = pickle.loads(data)
-    except pickle.UnpicklingError:
-        logger.error('Cannot unpack message getting from client.')
-    except TypeError:
-        logger.error('Got not bytes-like object for unpacking.')
-    except Exception as error:
-        logger.error(f'Unexpected error: {error}')
-    else:
-        logger.info(f'Client sent {request["action"]}-message.')
-    return request
 
 
 @log
@@ -76,7 +60,6 @@ def set_response(request: dict) -> bytes:
 
     actions = {
         'presence': 200,
-        'stop': 202,
     }
     result = b''
 
@@ -87,41 +70,80 @@ def set_response(request: dict) -> bytes:
     except Exception as error:
         logger.error(f'Unexpected error: {error}')
     else:
-        code = actions[action] if action else 400
+        if action == 'msg':
+            data = request
+        else:
+            code = actions[action] if action else 400
+            data = prepare_response(code)
         try:
-            result = pickle.dumps(prepare_response(code))
+            result = pickle.dumps(data)
         except pickle.PicklingError:
-            logger.error('Cannot pack message for sending to client.')
+            logger.error('Cannot pack message for sending to a client.')
     return result
+
+
+@log
+def read_requests(r_clients: list, all_clients: list) -> dict:
+    """ Read requests from clients."""
+
+    requests = {}
+
+    for sock in r_clients:
+        try:
+            requests[sock] = pickle.loads(sock.recv(1024))
+            print(requests[sock])
+        except (pickle.UnpicklingError, TypeError):
+            logger.error('Cannot unpack message getting from client.')
+        except:
+            logger.info(
+                f'Client {sock.fileno()} {sock.getpeername()} disconnected.')
+            all_clients.remove(sock)
+
+    return requests
+
+
+@log
+def write_responses(requests: dict, w_clients: list,
+                    all_clients: list) -> None:
+    """Answer clients who sent requests."""
+
+    for sock in w_clients:
+        if sock in requests:
+            try:
+                resp = set_response(requests[sock])
+                sock.send(resp)
+            except:
+                logger.info(f'Client {sock.fileno()} {sock.getpeername()}'
+                            f' disconnected.')
+                sock.close()
+                all_clients.remove(sock)
 
 
 @log
 def process(sock: socket) -> None:
     """Main server process."""
 
-    msg_max_size = 640
+    clients = []
 
     while True:
-        conn, _ = sock.accept()
         try:
-            data = conn.recv(msg_max_size)
-        except socket.timeout:
-            logger.warning('Socket was timed out. Server stopped.')
-        except OSError as error:
-            logger.error(f'Unexpected error: {error}')
+            conn, addr = sock.accept()
+        except OSError:
+            pass
         else:
-            request = get_request(data)
-            print(request)
+            logger.info(f'Connection request from {addr} received.')
+            clients.append(conn)
+        finally:
+            r = []
+            w = []
+            try:
+                r, w, e = select.select(clients, clients, [])
+            except:
+                pass
 
-            response = set_response(request)
-            if response:
-                conn.send(response)
-                conn.close()
-                logger.info(f'Connection closed.')
-
-            if request['action'] == 'stop':
-                logger.info('Server stopped.')
-                break
+            requests = read_requests(r, clients)
+            if requests:
+                write_responses(requests, w, clients)
 
 
 def main() -> None:

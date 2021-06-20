@@ -3,6 +3,8 @@ from time import time
 import pickle
 import argparse
 import logging.config
+from typing import Union
+
 from decorators import log
 
 logging.config.fileConfig('logging.ini')
@@ -34,30 +36,27 @@ def init() -> socket:
     except OSError as error:
         logger.critical(f'Socket was not initiated with next error: {error}')
     else:
-        logger.info(f'Connected to server on {addr}:{port}.')
+        logger.info(f'Connected to {addr}:{port}.')
         return s
 
 
 @log
-def set_request(action: str, user: str, status: str = None) -> bytes:
+def set_request() -> Union[str, bytes, None]:
     """Form request for sending to server."""
 
-    requests = {
-        'presence': {
-            'action': action,
-            'time': time(),
-            'type': 'status',
-            'user': {
-                'account_name': user,
-                'status': status
-            }
-        },
-        'stop': {
-            'action': action
-        }
-    }
+    action, src, dst = 'msg', 'Vasya', '*'
 
-    request = requests.get(action)
+    msg = input('Your message: ')
+    if msg == 'exit':
+        logger.info(f'Connection closed.')
+        return 'exit'
+    request = {
+        'action': action,
+        'time': time(),
+        'to': dst,
+        'from': src,
+        'message': msg
+    }
     try:
         return pickle.dumps(request) if request else None
     except pickle.PicklingError:
@@ -84,25 +83,36 @@ def get_response(data: bytes) -> dict:
 
 
 @log
-def main():
-    msg_max_size = 100
-    actions = ('presence', 'stop')
-    user = 'Vasya'
-    status = 'I am still here'
+def read_responses(conn: socket) -> None:
+    while True:
+        data = get_response(conn.recv(1024))
+        print(data)
 
-    for action in actions:
-        request = set_request(action, user, status)
-        conn = init()
-        if conn and request:
-            conn.send(request)
-            try:
-                data = conn.recv(msg_max_size)
-            except Exception as error:
-                logger.error(f'Unexpected error: {error}')
-            else:
-                response = get_response(data)
-                print(response)
-            logger.info(f'Connection closed.')
+
+@log
+def write_requests(conn: socket) -> None:
+    while True:
+        data = set_request()
+        if data:
+            if data == 'exit':
+                break
+            conn.send(data)
+        else:
+            logger.info('No data to sending.')
+
+
+@log
+def main():
+    conn = init()
+    if conn:
+        mode = input('Select mode (r/w): ')
+        try:
+            if mode == 'r':
+                read_responses(conn)
+            elif mode == 'w':
+                write_requests(conn)
+        except Exception as error:
+            logger.error(f'Unexpected error: {error}')
 
 
 if __name__ == '__main__':
