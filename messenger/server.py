@@ -91,7 +91,6 @@ def read_requests(r_clients: list, all_clients: list) -> dict:
     for sock in r_clients:
         try:
             requests[sock] = pickle.loads(sock.recv(1024))
-            print(requests[sock])
         except (pickle.UnpicklingError, TypeError):
             logger.error('Cannot unpack message getting from client.')
         except:
@@ -109,9 +108,10 @@ def write_responses(requests: dict, w_clients: list,
 
     for sock in w_clients:
         if sock in requests:
+            resp = set_response(requests[sock])
             try:
-                resp = set_response(requests[sock])
-                sock.send(resp)
+                for sock in all_clients:
+                    sock.send(resp)
             except:
                 logger.info(f'Client {sock.fileno()} {sock.getpeername()}'
                             f' disconnected.')

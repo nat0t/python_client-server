@@ -78,7 +78,7 @@ def get_response(data: bytes) -> dict:
     except Exception as error:
         logger.error(f'Unexpected error: {error}')
     else:
-        logger.info(f'Server responded with code {response["response"]}.')
+        logger.info(f'Server successfully responded.')
     return response
 
 
@@ -86,7 +86,7 @@ def get_response(data: bytes) -> dict:
 def read_responses(conn: socket) -> None:
     while True:
         data = get_response(conn.recv(1024))
-        print(data)
+        print(data['message'])
 
 
 @log
