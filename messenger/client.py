@@ -48,11 +48,12 @@ def set_request(flow: Queue) -> Union[str, bytes, None]:
 
     # Get data from server
     try:
-        response = flow.get_nowait()
+        response = flow.get(True, 1)
     except:
         response = {}
     request = ''
     user = response.get('user') if 'user' in response else 'guest'
+    print(response)
 
     sleep(0.5)
     menu = {
@@ -149,8 +150,8 @@ def get_response(data: bytes) -> dict:
 def read_responses(conn: socket, flow: Queue) -> None:
     while True:
         data = get_response(conn.recv(1024))
-        print(data['message'])
-        print(data)
+        # print(data['message'])
+        # print(data)
         flow.put(data)
 
 

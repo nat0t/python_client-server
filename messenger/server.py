@@ -70,7 +70,7 @@ def set_response(request: dict, db: dict) -> Tuple[dict, dict]:
         'join': 202,
         'leave': 202,
     }
-    result = b''
+    print(db)
 
     try:
         action = request.get('action')
@@ -131,7 +131,7 @@ def write_responses(requests: dict, w_clients: list,
     for sock in w_clients:
         if sock in requests:
             try:
-                resp = pickle.dumps(set_response(requests[sock], db))
+                resp = pickle.dumps(set_response(requests[sock], db)[0])
             except pickle.PicklingError:
                 logger.error('Cannot pack message for sending to a client.')
             else:
@@ -143,10 +143,8 @@ def write_responses(requests: dict, w_clients: list,
                             for user in db['rooms'][to][1:]:
                                 users[user].send(resp)
                         else:
-                            user = db['users'][to]
-                            users[user].send(resp)
+                            users[to].send(resp)
                     else:
-                        print(sock)
                         sock.send(resp)
                 except:
                     logger.info(f'Client {sock.fileno()} {sock.getpeername()}'
@@ -161,7 +159,7 @@ def process(sock: socket) -> None:
     """Main server process."""
 
     db = {
-        'users': {'u1': 'p1', 'u2': 'p2', 'u3': 'p3'},
+        'users': {'u1': 'p1', 'u2': 'p2', 'u3': 'p3', 'guest': ''},
           'rooms': {'r1': [], 'r2': []}
     }
     clients = []
