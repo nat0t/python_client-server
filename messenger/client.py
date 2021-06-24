@@ -1,5 +1,7 @@
 import socket
-from time import time
+from threading import Thread
+from queue import Queue
+from time import time, sleep
 import pickle
 import argparse
 import logging.config
@@ -41,22 +43,81 @@ def init() -> socket:
 
 
 @log
-def set_request() -> Union[str, bytes, None]:
+def set_request(flow: Queue) -> Union[str, bytes, None]:
     """Form request for sending to server."""
 
-    action, src, dst = 'msg', 'Vasya', '*'
+    # Get data from server
+    try:
+        response = flow.get_nowait()
+    except:
+        response = {}
+    user = 'guest'
+    request = ''
 
-    msg = input('Your message: ')
-    if msg == 'exit':
+    sleep(0.5)
+    menu = {
+        'guest': '1. Send message to user as guest.\n'
+                 '2. Authenticate.\n',
+        'non-guest': '1. Send message to user.\n'
+                     '2. Join to room.\n'
+                     '3. Quit from room.\n'
+                     '4. Send message to room.\n'}
+    action = input(
+        f'Choose your action, {user}:\n{menu["guest"] if user == "guest" else menu["non-guest"]}0. Quit from server.\n')
+    if action == '0':
+        # Disconnect from server
         logger.info(f'Connection closed.')
         return 'exit'
-    request = {
-        'action': action,
-        'time': time(),
-        'to': dst,
-        'from': src,
-        'message': msg
-    }
+    elif action == '1':
+        # Send message
+        to = input('Who do you want to send the message to? ')
+        msg = input('Your message: ')
+        request = {
+            'action': 'msg',
+            'time': time(),
+            'to': to,
+            'from': user,
+            'message': msg
+        }
+    elif action == '2':
+        # Authenticate
+        if user == 'guest':
+            user = input('Input your nickname: ')
+            request = {
+                'action': 'authenticate',
+                'time': time(),
+                'user': {
+                    'account_name': user
+                }
+            }
+        else:
+            # Join to room
+            room = input('Input name of room: ')
+            request = {
+                'action': 'join',
+                'time': time(),
+                'room': room
+            }
+    elif action == '3':
+        # Quit from room
+        room = input('Input name of room: ')
+        request = {
+            'action': 'leave',
+            'time': time(),
+            'room': room
+        }
+    elif action == '4':
+        # Send message to room
+        room = input('Input name of room: ')
+        msg = input('Your message: ')
+        request = {
+            'action': 'msg',
+            'time': time(),
+            'to': f"#{room}",
+            'from': user,
+            'message': msg
+        }
+
     try:
         return pickle.dumps(request) if request else None
     except pickle.PicklingError:
@@ -83,16 +144,17 @@ def get_response(data: bytes) -> dict:
 
 
 @log
-def read_responses(conn: socket) -> None:
+def read_responses(conn: socket, flow: Queue) -> None:
     while True:
         data = get_response(conn.recv(1024))
         print(data['message'])
+        flow.put(data)
 
 
 @log
-def write_requests(conn: socket) -> None:
+def write_requests(conn: socket, flow: Queue) -> None:
     while True:
-        data = set_request()
+        data = set_request(flow)
         if data:
             if data == 'exit':
                 break
@@ -104,15 +166,15 @@ def write_requests(conn: socket) -> None:
 @log
 def main():
     conn = init()
-    if conn:
-        mode = input('Select mode (r/w): ')
-        try:
-            if mode == 'r':
-                read_responses(conn)
-            elif mode == 'w':
-                write_requests(conn)
-        except Exception as error:
-            logger.error(f'Unexpected error: {error}')
+    try:
+        if conn:
+            flow = Queue()
+            read = Thread(target=read_responses, args=(conn, flow))
+            read.daemon = True
+            read.start()
+            write_requests(conn, flow)
+    except Exception as error:
+        logger.error(f'Unexpected error: {error}')
 
 
 if __name__ == '__main__':
