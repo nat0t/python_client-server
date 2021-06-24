@@ -4,6 +4,8 @@ from time import time
 import pickle
 import argparse
 import logging.config
+from typing import Tuple
+
 from decorators import log
 
 logging.config.fileConfig('logging.ini')
@@ -41,56 +43,76 @@ def init() -> socket:
 
 
 @log
-def prepare_response(code: int) -> dict:
+def prepare_response(code: int, user: str) -> dict:
     """Prepare answer based on getting code."""
 
     alerts = {
         200: 'OK',
         202: 'Accepted',
         400: 'Bad request',
+        401: 'Unauthorized',
+        402: 'Wrong user/password',
+        404: 'Not found'
     }
     alert = alerts.get(code)
-    result = {'response': code, 'time': time(), 'alert': alert}
+    result = {'response': code, 'time': time(), 'alert': alert, 'user': user}
     return result if alert else None
 
 
 @log
-def set_response(request: dict) -> bytes:
+def set_response(request: dict, db: dict) -> Tuple[dict, dict]:
     """Form response for sending to client."""
 
     actions = {
         'presence': 200,
+        'msg': 200,
+        'authenticate': 200,
+        'join': 202,
+        'leave': 202,
     }
     result = b''
 
     try:
         action = request.get('action')
+        user = request.get('user')
     except AttributeError:
         logger.error('The data to send is not dictionary. ')
     except Exception as error:
         logger.error(f'Unexpected error: {error}')
     else:
-        if action == 'msg':
-            data = request
-        else:
-            code = actions[action] if action else 400
-            data = prepare_response(code)
-        try:
-            result = pickle.dumps(data)
-        except pickle.PicklingError:
-            logger.error('Cannot pack message for sending to a client.')
-    return result
+        if action == 'authenticate':
+            if user in db['users'] and request['password'] == db['users'][user]:
+                code = actions[action]
+            else:
+                code = 402
+        elif action in ('join', 'leave'):
+            room = request.get('room')
+            if room in db['rooms']:
+                if action == 'join':
+                    db['rooms'][room].append(user)
+                else:
+                    db['rooms'][room].remove(user)
+                code = actions[action]
+            else:
+                code = 404
+        elif action == 'msg':
+            return request, db
+    result = prepare_response(code, user)
+    return result, db
 
 
 @log
-def read_requests(r_clients: list, all_clients: list) -> dict:
+def read_requests(r_clients: list, all_clients: list) -> Tuple[dict, dict]:
     """ Read requests from clients."""
 
     requests = {}
+    users = {}
 
     for sock in r_clients:
         try:
             requests[sock] = pickle.loads(sock.recv(1024))
+            user = requests[sock]['user']
+            users[user] = sock
         except (pickle.UnpicklingError, TypeError):
             logger.error('Cannot unpack message getting from client.')
         except:
@@ -98,31 +120,50 @@ def read_requests(r_clients: list, all_clients: list) -> dict:
                 f'Client {sock.fileno()} {sock.getpeername()} disconnected.')
             all_clients.remove(sock)
 
-    return requests
+    return requests, users
 
 
 @log
 def write_responses(requests: dict, w_clients: list,
-                    all_clients: list) -> None:
+                    all_clients: list, db: dict, users: dict) -> dict:
     """Answer clients who sent requests."""
 
     for sock in w_clients:
         if sock in requests:
-            resp = set_response(requests[sock])
             try:
-                for sock in all_clients:
-                    sock.send(resp)
-            except:
-                logger.info(f'Client {sock.fileno()} {sock.getpeername()}'
-                            f' disconnected.')
-                sock.close()
-                all_clients.remove(sock)
+                resp = pickle.dumps(set_response(requests[sock], db))
+            except pickle.PicklingError:
+                logger.error('Cannot pack message for sending to a client.')
+            else:
+                try:
+                    action = requests[sock].get('action')
+                    if action == 'msg':
+                        to = requests[sock].get('to')
+                        if to.startswith('#'):
+                            for user in db['rooms'][to][1:]:
+                                users[user].send(resp)
+                        else:
+                            user = db['users'][to]
+                            users[user].send(resp)
+                    else:
+                        print(sock)
+                        sock.send(resp)
+                except:
+                    logger.info(f'Client {sock.fileno()} {sock.getpeername()}'
+                                f' disconnected.')
+                    sock.close()
+                    all_clients.remove(sock)
+        return db
 
 
 @log
 def process(sock: socket) -> None:
     """Main server process."""
 
+    db = {
+        'users': {'u1': 'p1', 'u2': 'p2', 'u3': 'p3'},
+          'rooms': {'r1': [], 'r2': []}
+    }
     clients = []
 
     while True:
@@ -141,9 +182,9 @@ def process(sock: socket) -> None:
             except:
                 pass
 
-            requests = read_requests(r, clients)
+            requests, users = read_requests(r, clients)
             if requests:
-                write_responses(requests, w, clients)
+                db = write_responses(requests, w, clients, db, users)
 
 
 def main() -> None:

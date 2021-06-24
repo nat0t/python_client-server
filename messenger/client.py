@@ -51,8 +51,8 @@ def set_request(flow: Queue) -> Union[str, bytes, None]:
         response = flow.get_nowait()
     except:
         response = {}
-    user = 'guest'
     request = ''
+    user = response.get('user') if 'user' in response else 'guest'
 
     sleep(0.5)
     menu = {
@@ -76,19 +76,19 @@ def set_request(flow: Queue) -> Union[str, bytes, None]:
             'action': 'msg',
             'time': time(),
             'to': to,
-            'from': user,
+            'user': user,
             'message': msg
         }
     elif action == '2':
         # Authenticate
         if user == 'guest':
             user = input('Input your nickname: ')
+            password = input('Input your password: ')
             request = {
                 'action': 'authenticate',
                 'time': time(),
-                'user': {
-                    'account_name': user
-                }
+                'user': user,
+                'password': password
             }
         else:
             # Join to room
@@ -96,7 +96,8 @@ def set_request(flow: Queue) -> Union[str, bytes, None]:
             request = {
                 'action': 'join',
                 'time': time(),
-                'room': room
+                'room': room,
+                'user': user
             }
     elif action == '3':
         # Quit from room
@@ -104,7 +105,8 @@ def set_request(flow: Queue) -> Union[str, bytes, None]:
         request = {
             'action': 'leave',
             'time': time(),
-            'room': room
+            'room': room,
+            'user': user
         }
     elif action == '4':
         # Send message to room
@@ -148,6 +150,7 @@ def read_responses(conn: socket, flow: Queue) -> None:
     while True:
         data = get_response(conn.recv(1024))
         print(data['message'])
+        print(data)
         flow.put(data)
 
 
