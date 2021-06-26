@@ -1,11 +1,10 @@
 import socket
+import sys
 from threading import Thread
-from queue import Queue
 from time import time, sleep
 import pickle
 import argparse
 import logging.config
-from typing import Union
 
 from decorators import log
 
@@ -43,89 +42,44 @@ def init() -> socket:
 
 
 @log
-def set_request(flow: Queue) -> Union[str, bytes, None]:
-    """Form request for sending to server."""
+def write_request(conn: socket, action: str, **kwargs) -> None:
+    """Send request to server with specified action."""
 
-    # Get data from server
-    try:
-        response = flow.get(True, 1)
-    except:
-        response = {}
-    request = ''
-    user = response.get('user') if 'user' in response else 'guest'
-    print(response)
-
-    sleep(0.5)
-    menu = {
-        'guest': '1. Send message to user as guest.\n'
-                 '2. Authenticate.\n',
-        'non-guest': '1. Send message to user.\n'
-                     '2. Join to room.\n'
-                     '3. Quit from room.\n'
-                     '4. Send message to room.\n'}
-    action = input(
-        f'Choose your action, {user}:\n{menu["guest"] if user == "guest" else menu["non-guest"]}0. Quit from server.\n')
-    if action == '0':
-        # Disconnect from server
-        logger.info(f'Connection closed.')
-        return 'exit'
-    elif action == '1':
-        # Send message
-        to = input('Who do you want to send the message to? ')
-        msg = input('Your message: ')
+    request = {}
+    if action == 'presence':
         request = {
-            'action': 'msg',
+            'action': 'presence',
             'time': time(),
-            'to': to,
-            'user': user,
-            'message': msg
+            'account_name': kwargs['account_name'],
         }
-    elif action == '2':
-        # Authenticate
-        if user == 'guest':
-            user = input('Input your nickname: ')
-            password = input('Input your password: ')
-            request = {
-                'action': 'authenticate',
-                'time': time(),
-                'user': user,
-                'password': password
-            }
-        else:
-            # Join to room
-            room = input('Input name of room: ')
-            request = {
-                'action': 'join',
-                'time': time(),
-                'room': room,
-                'user': user
-            }
-    elif action == '3':
-        # Quit from room
-        room = input('Input name of room: ')
+    elif action == 'join':
+        request = {
+            'action': 'join',
+            'time': time(),
+            'room': kwargs['room'],
+        }
+    elif action == 'leave':
         request = {
             'action': 'leave',
             'time': time(),
-            'room': room,
-            'user': user
+            'room': kwargs['room'],
         }
-    elif action == '4':
-        # Send message to room
-        room = input('Input name of room: ')
-        msg = input('Your message: ')
+    elif action == 'msg':
         request = {
             'action': 'msg',
             'time': time(),
-            'to': f"#{room}",
-            'from': user,
-            'message': msg
+            'to': kwargs['to'],
+            'from': kwargs['from_'],
+            'message': kwargs['msg']
         }
 
-    try:
-        return pickle.dumps(request) if request else None
-    except pickle.PicklingError:
-        logger.error('Cannot pack message for sending to server.')
-        return b''
+    if request:
+        try:
+            conn.send(pickle.dumps(request))
+        except pickle.PicklingError:
+            logger.error('Cannot pack message for sending to server.')
+        except OSError:
+            logger.error('Cannot send message to server.')
 
 
 @log
@@ -137,46 +91,48 @@ def get_response(data: bytes) -> dict:
         response = pickle.loads(data)
     except pickle.UnpicklingError:
         logger.error('Cannot unpack message getting from server.')
-    except TypeError:
-        logger.error('Got not bytes-like object for unpacking.')
     except Exception as error:
         logger.error(f'Unexpected error: {error}')
-    else:
-        logger.info(f'Server successfully responded.')
     return response
 
 
 @log
-def read_responses(conn: socket, flow: Queue) -> None:
+def read_responses(conn: socket) -> None:
+    """Receive messages from server and print it."""
+
     while True:
-        data = get_response(conn.recv(1024))
-        # print(data['message'])
-        # print(data)
-        flow.put(data)
+        try:
+            response = get_response(conn.recv(1024))
+        except OSError:
+            logger.warning('Server is not available. Client is stopping...')
+            sys.exit(0)
+
+        if response.get('action') == 'msg':
+            print(f'Sender {response["from"]}\nMessage: {response["message"]}')
 
 
 @log
-def write_requests(conn: socket, flow: Queue) -> None:
-    while True:
-        data = set_request(flow)
-        if data:
-            if data == 'exit':
-                break
-            conn.send(data)
-        else:
-            logger.info('No data to sending.')
+def main() -> None:
+    """Main process of messenger's client."""
 
-
-@log
-def main():
-    conn = init()
     try:
-        if conn:
-            flow = Queue()
-            read = Thread(target=read_responses, args=(conn, flow))
-            read.daemon = True
-            read.start()
-            write_requests(conn, flow)
+        conn = init()
+        print('Welcome to our messenger. If you want to stop, type "exit".')
+        account_name = input('Type your nickname: ')
+        write_request(conn, 'presence', account_name=account_name)
+        room = input('Type name of your chat: ')
+        write_request(conn, 'join', room=room)
+
+        read = Thread(target=read_responses, args=(conn,))
+        read.daemon = True
+        read.start()
+
+        while True:
+            sleep(0.5)
+            msg = input('Your message: ')
+            if msg == 'exit':
+                break
+            write_request(conn, 'msg', to=room, from_=account_name, msg=msg)
     except Exception as error:
         logger.error(f'Unexpected error: {error}')
 
